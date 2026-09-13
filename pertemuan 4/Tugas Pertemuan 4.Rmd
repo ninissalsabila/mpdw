@@ -1,0 +1,161 @@
+---
+title: "Tugas Pertemuan 4"
+author: "Nisrina Salsabila"
+date: "2026-09-13"
+output:  
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Memuat library TSA untuk plot EACF
+library(TSA)
+
+# Menentukan seed agar hasil pembangkitan data konsisten/reproducible
+set.seed(123)
+```
+
+# **PROSES MA(2)**
+```{r}
+# --- 1. Pembangkitan Data MA(2) (n = 300) ---
+# Parameter MA(2): theta1 = 0.4, theta2 = 0.6
+n <- 300
+e <- rnorm(n + 2, mean = 0, sd = 1) # White noise
+
+# a. Pembangkitan Manual
+ma2_manual <- numeric(n)
+for (t in 1:n) {
+  ma2_manual[t] <- e[t+2] + 0.4 * e[t+1] + 0.6 * e[t]
+}
+
+# b. Pembangkitan dengan arima.sim
+ma2_sim <- arima.sim(model = list(ma = c(0.4, 0.6)), n = n)
+
+# --- 2. Plot Identifikasi & Stasioneritas ---
+par(mfrow = c(2, 2))
+plot(ma2_manual, type = "l", main = "Plot Time Series MA(2)", ylab = "Yt")
+acf(ma2_manual, main = "Plot ACF MA(2)")
+pacf(ma2_manual, main = "Plot PACF MA(2)")
+eacf(ma2_manual) 
+par(mfrow = c(1, 1))
+
+# --- 3. Scatterplot (Yt vs Lag) ---
+par(mfrow = c(1, 3))
+plot(ma2_manual[2:n], ma2_manual[1:(n-1)], xlab = "Yt-1", ylab = "Yt", main = "Yt vs Yt-1")
+plot(ma2_manual[3:n], ma2_manual[1:(n-2)], xlab = "Yt-2", ylab = "Yt", main = "Yt vs Yt-2")
+plot(ma2_manual[4:n], ma2_manual[1:(n-3)], xlab = "Yt-3", ylab = "Yt", main = "Yt vs Yt-3")
+par(mfrow = c(1, 1))
+
+# --- 4. Hitung Autokorelasi (Sampel vs Teoritis) ---
+# Autokorelasi Sampel (Data Bangkitan)
+acf_ma2_sample <- acf(ma2_manual, lag.max = 3, plot = FALSE)$acf[1:4]
+
+# Autokorelasi Teoritis
+acf_ma2_theoretical <- ARMAacf(ma = c(0.4, 0.6), lag.max = 3)
+
+# Perbandingan Hasil
+data.frame(
+  Lag = 0:3,
+  Teoritis = acf_ma2_theoretical,
+  Sampel = acf_ma2_sample
+)
+```
+
+# **PROSES AR(2)**
+```{r}
+# --- 1. Pembangkitan Data AR(2) (n = 300) ---
+# Parameter AR(2): phi1 = 0.5, phi2 = 0.2
+e_ar <- rnorm(n, mean = 0, sd = 1)
+
+# a. Pembangkitan Manual
+ar2_manual <- numeric(n)
+ar2_manual[1] <- e_ar[1]
+ar2_manual[2] <- 0.5 * ar2_manual[1] + e_ar[2]
+
+for (t in 3:n) {
+  ar2_manual[t] <- 0.5 * ar2_manual[t-1] + 0.2 * ar2_manual[t-2] + e_ar[t]
+}
+
+# b. Pembangkitan dengan arima.sim
+ar2_sim <- arima.sim(model = list(ar = c(0.5, 0.2)), n = n)
+
+# --- 2. Plot Identifikasi & Stasioneritas ---
+par(mfrow = c(2, 2))
+plot(ar2_manual, type = "l", main = "Plot Time Series AR(2)", ylab = "Yt")
+acf(ar2_manual, main = "Plot ACF AR(2)")
+pacf(ar2_manual, main = "Plot PACF AR(2)")
+eacf(ar2_manual)
+par(mfrow = c(1, 1))
+
+# --- 3. Scatterplot (Yt vs Lag) ---
+par(mfrow = c(1, 3))
+plot(ar2_manual[2:n], ar2_manual[1:(n-1)], xlab = "Yt-1", ylab = "Yt", main = "Yt vs Yt-1")
+plot(ar2_manual[3:n], ar2_manual[1:(n-2)], xlab = "Yt-2", ylab = "Yt", main = "Yt vs Yt-2")
+plot(ar2_manual[4:n], ar2_manual[1:(n-3)], xlab = "Yt-3", ylab = "Yt", main = "Yt vs Yt-3")
+par(mfrow = c(1, 1))
+
+# --- 4. Hitung Autokorelasi (Sampel vs Teoritis) ---
+acf_ar2_sample <- acf(ar2_manual, lag.max = 3, plot = FALSE)$acf[1:4]
+acf_ar2_theoretical <- ARMAacf(ar = c(0.5, 0.2), lag.max = 3)
+
+data.frame(
+  Lag = 0:3,
+  Teoritis = acf_ar2_theoretical,
+  Sampel = acf_ar2_sample
+)
+```
+
+# **PROSES ARMA(2,2)**
+```{r}
+# --- 1. Pembangkitan Data ARMA(2,2) (n = 300) ---
+# Parameter ARMA(2,2): phi1=0.5, phi2=0.2, theta1=0.4, theta2=0.6
+e_arma <- rnorm(n + 2, mean = 0, sd = 1)
+
+# a. Pembangkitan Manual
+arma22_manual <- numeric(n)
+# Inisialisasi lag awal
+arma22_manual[1] <- e_arma[3] + 0.4 * e_arma[2] + 0.6 * e_arma[1]
+arma22_manual[2] <- 0.5 * arma22_manual[1] + e_arma[4] + 0.4 * e_arma[3] + 0.6 * e_arma[2]
+
+for (t in 3:n) {
+  arma22_manual[t] <- 0.5 * arma22_manual[t-1] + 0.2 * arma22_manual[t-2] + 
+                      e_arma[t+2] + 0.4 * e_arma[t+1] + 0.6 * e_arma[t]
+}
+
+# b. Pembangkitan dengan arima.sim
+arma22_sim <- arima.sim(model = list(ar = c(0.5, 0.2), ma = c(0.4, 0.6)), n = n)
+
+# --- 2. Plot Identifikasi & Stasioneritas ---
+par(mfrow = c(2, 2))
+plot(arma22_manual, type = "l", main = "Plot Time Series ARMA(2,2)", ylab = "Yt")
+acf(arma22_manual, main = "Plot ACF ARMA(2,2)")
+pacf(arma22_manual, main = "Plot PACF ARMA(2,2)")
+eacf(arma22_manual)
+par(mfrow = c(1, 1))
+
+# --- 3. Scatterplot (Yt vs Lag) ---
+par(mfrow = c(1, 3))
+plot(arma22_manual[2:n], arma22_manual[1:(n-1)], xlab = "Yt-1", ylab = "Yt", main = "Yt vs Yt-1")
+plot(arma22_manual[3:n], arma22_manual[1:(n-2)], xlab = "Yt-2", ylab = "Yt", main = "Yt vs Yt-2")
+plot(arma22_manual[4:n], arma22_manual[1:(n-3)], xlab = "Yt-3", ylab = "Yt", main = "Yt vs Yt-3")
+par(mfrow = c(1, 1))
+
+# --- 4. Hitung Autokorelasi (Sampel vs Teoritis) ---
+acf_arma22_sample <- acf(arma22_manual, lag.max = 3, plot = FALSE)$acf[1:4]
+acf_arma22_theoretical <- ARMAacf(ar = c(0.5, 0.2), ma = c(0.4, 0.6), lag.max = 3)
+
+data.frame(
+  Lag = 0:3,
+  Teoritis = acf_arma22_theoretical,
+  Sampel = acf_arma22_sample
+)
+```
+
