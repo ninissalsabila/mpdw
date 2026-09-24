@@ -1,0 +1,210 @@
+---
+title: "Pemodelan ARIMA"
+author: "Nisrina Salsabila"
+date: "2026-09-24"
+output:
+  rmdformats::readthedown
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **Import Data**
+
+## *Libraries*
+
+```{r}
+library(forecast)
+library(tseries)
+library(ggplot2)
+```
+
+## *Data*
+
+```{r}
+data <- read.csv("C:/Users/X13/Desktop/SEMS 5/MPDW/mpdw/pertemuan 2/AAPL.csv")
+head(data)
+```
+
+```{r}
+# Cek nama semua kolom di dataset
+colnames(data)
+kolom_target <- data[, 2] 
+
+# Ubah ke numerik
+kolom_target <- as.numeric(kolom_target)
+
+# Buat time series
+ts_data <- ts(kolom_target, start = c(2020, 1), frequency = 12)
+```
+
+## *Plot Data Awal*
+
+```{r}
+autoplot(ts_data) +
+  ggtitle("Plot Deret Waktu Data Awal") +
+  xlab("Waktu") + ylab("Nilai") +
+  theme_minimal()
+```
+
+Terlihat data memiliki tren naik ekstrem dan varians yang membesar (belum stasioner).
+
+# **Uji Statisioneritas**
+## *Transformasi Logaritma untuk menstabilkan varians (karena fluktuasi membesar)*
+```{r}
+ts_log <- log(ts_data)
+```
+
+## *Plot data setelah transformasi log*
+```{r}
+autoplot(ts_log) +
+  ggtitle("Plot Data Setelah Transformasi Logaritma (Varians Lebih Stabil)") +
+  xlab("Waktu") + ylab("Log(Nilai)") +
+  theme_minimal()
+```
+
+Menstabilkan varians dengan transformasi log().
+
+## *Uji ADF pada data Log (Mengecek Stasioneritas Rata-rata)*
+```{r}
+adf.test(ts_log)
+```
+
+## *Lakukan Differencing (d = 1) pada data log karena data memiliki tren kuat*
+```{r}
+data_diff <- diff(ts_log, differences = 1)
+```
+
+## *Plot data setelah Differencing d = 1*
+```{r}
+autoplot(data_diff) +
+  ggtitle("Plot Data Setelah Log + Differencing (d = 1)") +
+  xlab("Waktu") + ylab("Diff Log(Nilai)") +
+  theme_minimal()
+```
+
+Menstabilkan rata-rata dengan pembedaan diff.
+
+## *Uji ADF Ulang pada Data yang Sudah Di-differencing*
+```{r}
+adf.test(data_diff)
+```
+
+Data menjadi stasioner (fluktuasi berpusat di angka 0) dan dikonfirmasi melalui ADF Test.
+
+# **Identifikasi Model Potential**
+```{r}
+par(mfrow = c(1, 2))
+```
+
+## *ACF (Autocorrelation Function) -> untuk mengidentifikasi orde MA (q)*
+```{r}
+acf(data_diff, main = "ACF (Data Diff Log)", lag.max = 30)
+```
+
+## *PACF (Partial Autocorrelation Function) -> untuk mengidentifikasi orde AR (p)*
+```{r}
+pacf(data_diff, main = "PACF (Data Diff Log)", lag.max = 30)
+
+# Kembalikan layout plot ke semula
+par(mfrow = c(1, 1))
+```
+
+Menentukan kandidat model dasar seperti ARIMA(0,1,0), ARIMA(1,1,1), atau pemodelan otomatis.
+
+# **Pendugaan Parameter dan Pemilihan Model Terbaik**
+```{r}
+# Opsi 1: Model ARIMA(0,1,0) - Random Walk
+fit_010 <- Arima(ts_log, order = c(0, 1, 0))
+
+# Opsi 2: Model ARIMA(1,1,1)
+fit_111 <- Arima(ts_log, order = c(1, 1, 1))
+
+# Opsi 3: Model Otomatis menggunakan auto.arima
+fit_auto <- auto.arima(ts_log, d = 1, seasonal = FALSE, ic = "aic", trace = TRUE)
+
+# Ringkasan model terbaik dari auto.arima
+summary(fit_auto)
+
+# Membandingkan kriteria kebaikan model (AIC & BIC terendah adalah yang terbaik)
+AIC(fit_010, fit_111, fit_auto)
+BIC(fit_010, fit_111, fit_auto)
+```
+
+# **Analisis Sisaan**
+## *Pilih model terbaik hasil dari auto.arima*
+```{r}
+model_terbaik <- fit_auto
+```
+
+## *Plot diagnostik visual (Residuals over time, ACF Residuals, Histogram)*
+```{r}
+checkresiduals(model_terbaik)
+```
+
+## *Uji Formal Ljung-Box (Mengecek apakah sisaan bersifat White Noise)*
+```{r}
+ljung_test <- checkresiduals(model_terbaik)$lb.test
+print(ljung_test)
+```
+
+## *Uji Normalitas Sisaan (Jarque-Bera Test)*
+```{r}
+jarque.bera.test(residuals(model_terbaik))
+```
+Terpilih model awal ARIMA(4,1,1) dari auto.arima() dan model alternatif ARIMA(1,1,1).
+
+# **Overfitting**
+## *Fit model yang lebih sederhana*
+```{r}
+fit_111 <- Arima(ts_log, order = c(1, 1, 1), include.drift = TRUE)
+fit_011 <- Arima(ts_log, order = c(0, 1, 1), include.drift = TRUE)
+```
+
+## *Cek ringkasan dan signifikansi parameter model ARIMA(1,1,1)*
+```{r}
+summary(fit_111)
+```
+
+## *Bandingkan nilai BIC (BIC memberikan penalti lebih berat untuk model yang kompleks)*
+```{r}
+BIC(fit_auto, fit_111, fit_011)
+```
+
+ARIMA(1,1,1) dengan drift dipilih sebagai model terbaik karena lebih hemat parameter (parsimonious), nilai BIC lebih bagus, dan bebas dari risiko overfitting.
+
+# **Forecasting Model ARIMA (1,1,1)**
+```{r}
+model_final <- fit_111
+
+# Peramalan dalam skala Log untuk h-periode ke depan (misal: 12 periode)
+ramalan_log <- forecast(model_final, h = 12)
+```
+
+## *Transformasi balik dari skala Log ke Skala Asli menggunakan exp()*
+```{r}
+ramalan_asli <- ramalan_log
+ramalan_asli$mean  <- exp(ramalan_log$mean)         # Nilai Duga Forecast
+ramalan_asli$lower <- exp(ramalan_log$lower)       # Batas Bawah Interval Kepercayaan
+ramalan_asli$upper <- exp(ramalan_log$upper)       # Batas Atas Interval Kepercayaan
+ramalan_asli$x     <- exp(ramalan_log$x)               # Data Awal Skala Asli
+```
+
+## *Tabel Hasil Peramalan Skala Asli*
+```{r}
+print("--- Tabel Hasil Peramalan Skala Asli (ARIMA 1,1,1) ---")
+print(ramalan_asli)
+```
+
+## *Plot Grafik Peramalan Skala Asli*
+```{r}
+autoplot(ramalan_asli) +
+  ggtitle("Hasil Peramalan Model ARIMA(1,1,1) - Skala Asli") +
+  xlab("Waktu") + ylab("Nilai") +
+  theme_minimal()
+```
+
+Diperoleh poin hasil peramalan (Point Forecast) beserta interval kepercayaannya (80% dan 95%) dalam skala riil.
+
+
